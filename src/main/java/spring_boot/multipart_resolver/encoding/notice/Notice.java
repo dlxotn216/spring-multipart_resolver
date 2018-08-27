@@ -1,4 +1,4 @@
-package com.example.demo.notice;
+package spring_boot.multipart_resolver.encoding.notice;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;

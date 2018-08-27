@@ -1,4 +1,4 @@
-package com.example.demo;
+package spring_boot.multipart_resolver.encoding;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;

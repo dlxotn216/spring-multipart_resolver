@@ -1,10 +1,8 @@
-package com.example.demo.config;
+package spring_boot.multipart_resolver.encoding.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.annotation.Order;
 import org.springframework.web.multipart.commons.CommonsMultipartResolver;
-import org.springframework.web.multipart.support.MultipartFilter;
 
 /**
  * Created by taesu on 2018-04-18.
@@ -49,11 +47,18 @@ public class MultipartConfig {
         return multipart;
     }
 
-    @Bean
-    @Order(1) //빼주어도 무관하나 붙이는게 좋을 듯 하다
-    public MultipartFilter multipartFilter() {
-        MultipartFilter multipartFilter = new MultipartFilter();
-        multipartFilter.setMultipartResolverBeanName("multipartResolver");
-        return multipartFilter;
-    }
+    /*
+    Dispatcher servlet 이후에 시작되는 Multipart Request에 대한 parseRequest 작업을
+    Filter에서 처리하는 설정.
+
+    Spring Security, Spring Session 등의 프로젝트 등에서 Filter를 이용하여
+    request 객체의 body를 먼저 읽어 처리하는 경우 유용하게 사용 가능.
+     */
+//    @Bean
+//    @Order(1)
+//    public MultipartFilter multipartFilter() {
+//        MultipartFilter multipartFilter = new MultipartFilter();
+//        multipartFilter.setMultipartResolverBeanName("multipartResolver");
+//        return multipartFilter;
+//    }
 }
