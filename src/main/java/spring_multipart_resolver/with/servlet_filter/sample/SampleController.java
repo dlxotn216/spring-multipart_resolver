@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class SampleController {
 
     @PostMapping("/sample")
-    public String SampleTest(@RequestParam(value = "upload", required = false) MultipartFile multipartFile,
+    public String SampleTest(@RequestParam(value = "upload") MultipartFile multipartFile,
                              @RequestParam(value = "text") String testParam) {
         System.out.println("textParam is :"+ testParam);
         if (multipartFile != null) {
