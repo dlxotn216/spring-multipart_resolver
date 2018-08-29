@@ -217,7 +217,7 @@ CommonsMultipartResolver의 사용이 필요했다.
 
 계속 검색을 하던 중 아래 Spring-session 프로젝트 Github의 이슈를 찾았다.  
 <a href="https://github.com/spring-projects/spring-session/issues/649">request.getInputStream is empty#649</a>
-<table><tr><td>
+<table border="2" style="width: fit-content"><tr><td>
 <img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/spring-session-request-param-null-github-issue.png" style="border: solid 5px black;"  />
 </td></tr></table>
 CookieHttpSessionStrategy를 사용할 경우 내부에서 getParameter를 호출 할 때 Requets가 먼저 parsing 된다는 것이다.  
