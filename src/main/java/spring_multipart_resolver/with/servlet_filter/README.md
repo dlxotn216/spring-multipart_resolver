@@ -76,48 +76,48 @@ Filter쪽에 문제가 있지 않을까 싶었다.
 ```java
 class DispatcherServlet {
     protected void doDispatch(HttpServletRequest request, HttpServletResponse response) throws Exception {
-		HttpServletRequest processedRequest = request;
-		HandlerExecutionChain mappedHandler = null;
-		boolean multipartRequestParsed = false;
+        HttpServletRequest processedRequest = request;
+        HandlerExecutionChain mappedHandler = null;
+        boolean multipartRequestParsed = false;
 
-		WebAsyncManager asyncManager = WebAsyncUtils.getAsyncManager(request);
+        WebAsyncManager asyncManager = WebAsyncUtils.getAsyncManager(request);
         ModelAndView mv = null;
         Exception dispatchException = null;
-        
+
         processedRequest = checkMultipart(request);             
         multipartRequestParsed = (processedRequest != request);
         //...
     }
     
-    protected HttpServletRequest checkMultipart(HttpServletRequest request) throws MultipartException {
-		if (this.multipartResolver != null && this.multipartResolver.isMultipart(request)) {
-			if (WebUtils.getNativeRequest(request, MultipartHttpServletRequest.class) != null) {
-				if (request.getDispatcherType().equals(DispatcherType.REQUEST)) {
-					logger.trace("Request already resolved to MultipartHttpServletRequest, e.g. by MultipartFilter");
-				}
-			}
-			else if (hasMultipartException(request) ) {
-				logger.debug("Multipart resolution previously failed for current request - " +
-						"skipping re-resolution for undisturbed error rendering");
-			}
-			else {
-				try {
-					return this.multipartResolver.resolveMultipart(request);
-				}
-				catch (MultipartException ex) {
-					if (request.getAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE) != null) {
-						logger.debug("Multipart resolution failed for error dispatch", ex);
-						// Keep processing error dispatch with regular request handle below
-					}
-					else {
-						throw ex;
-					}
-				}
-			}
-		}
-		// If not returned before: return original request.
-		return request;
-	}
+    protected HttpServletRequest checkMultipart(HttpServletRequest request) throws MultipartException {  
+        if (this.multipartResolver != null && this.multipartResolver.isMultipart(request)) {
+            if (WebUtils.getNativeRequest(request, MultipartHttpServletRequest.class) != null) {
+                if (request.getDispatcherType().equals(DispatcherType.REQUEST)) {
+                    logger.trace("Request already resolved to MultipartHttpServletRequest, e.g. by MultipartFilter");
+                }
+            }
+            else if (hasMultipartException(request) ) {
+                logger.debug("Multipart resolution previously failed for current request - " +
+                "skipping re-resolution for undisturbed error rendering");
+            }
+            else {
+                try {
+                    return this.multipartResolver.resolveMultipart(request);
+                }
+                catch (MultipartException ex) {
+                    if (request.getAttribute(WebUtils.ERROR_EXCEPTION_ATTRIBUTE) != null) {
+                        logger.debug("Multipart resolution failed for error dispatch", ex);
+                        // Keep processing error dispatch with regular request handle below
+                    }
+                    else {
+                        throw ex;
+                    }
+                }
+            }
+        }
+        // If not returned before: return original request.
+        return request;
+    }
 }
 ```
 그래서 당장의 해결책으로 생각해 낸 것은 MultipartFilter이었다.  
@@ -125,7 +125,7 @@ class DispatcherServlet {
 JavaDoc을 확인해보았다.  
 > Servlet Filter that resolves multipart requests via a {@link MultipartResolver}.
 > in the root web application context.
-
+>
 > Looks up the MultipartResolver in Spring's root web application context.    
 > Supports a "multipartResolverBeanName" filter init-param in {@code web.xml};    
 > the default bean name is "filterMultipartResolver".  
@@ -183,18 +183,19 @@ StandardMultipartResolver에 의해 parsing 된 것이었다.
 ```java
 class MultipartFilter {
     protected MultipartResolver lookupMultipartResolver() {
-    		WebApplicationContext wac = WebApplicationContextUtils.getWebApplicationContext(getServletContext());
-    		String beanName = getMultipartResolverBeanName();
-    		if (wac != null && wac.containsBean(beanName)) {
-    			if (logger.isDebugEnabled()) {
-    				logger.debug("Using MultipartResolver '" + beanName + "' for MultipartFilter");
-    			}
-    			return wac.getBean(beanName, MultipartResolver.class);
-    		}
-    		else {
-    			return this.defaultMultipartResolver;
-    		}
-    	}
+        WebApplicationContext wac 
+                = WebApplicationContextUtils.getWebApplicationContext(getServletContext());
+        String beanName = getMultipartResolverBeanName();
+        if (wac != null && wac.containsBean(beanName)) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Using MultipartResolver '" + beanName + "' for MultipartFilter");
+        }
+        return wac.getBean(beanName, MultipartResolver.class);
+        }
+        else {
+            return this.defaultMultipartResolver;
+        }
+    }
 }
 ```
 
@@ -210,13 +211,13 @@ CommonsMultipartResolver의 사용이 필요했다.
 ```
 
 그후 테스트 결과를 보면 정상적으로 파일 업로드가 되었고 업로드 된 파일은  CommonsMultipartFile 타입의 객체이었다.  
-<img src="" />
+<img src="" style="border: solid 5px black;" />
 
 ## 3. 원인 파악
 
 계속 검색을 하던 중 아래 Spring-session 프로젝트 Github의 이슈를 찾았다.  
 <a href="https://github.com/spring-projects/spring-session/issues/649">request.getInputStream is empty#649</a>  
-<img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/spring-session-request-param-null-github-issue.png" />
+<img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/spring-session-request-param-null-github-issue.png" style="border: solid 5px black;"  />
 
 CookieHttpSessionStrategy를 사용할 경우 내부에서 getParameter를 호출 할 때 Requets가 먼저 parsing 된다는 것이다.  
  
@@ -256,7 +257,7 @@ Client에서는 이후 모든 요청에 x-auth-token Header에 Session ID 값을
 
 하지만 프로젝트 어디서도 Login 후 x-auth-token 헤더에 대한 처리도 없을 뿐 더러  
 실제 Login 인증 완료 후 API의 Response를 봐도 x-auth-token 헤더 자체가 없었다.  
-<img src="" />
+<img src="" style="border: solid 5px black;"  />
 
 이 부분을 굉장히 이상하게 생각하였고 혹시 x-auth-token을 request에 담아 보내지 않았기에  
 매번 인증 과정이 거쳐졌고 그래서 request.getparameter를 호출하는 authenticationStrategy 로직을 타는 것이  
@@ -265,7 +266,7 @@ Client에서는 이후 모든 요청에 x-auth-token Header에 Session ID 값을
 문제 발견을 위해 가장 원초적인 방법으로 Encoding Filter로 부터 모든 디버깅 과정을 따라갔다.  
 그 중 우연히발견 한 것인데 아래의 코드에서 보면 HttpSessionStrategy로 주입 된 구현체가   
 CookieHttpSessionStrategy인 것을 볼 수 있다.  
-<img src="" />
+<img src="" style="border: solid 5px black;" />
 
 분명 이 Bean에는 아래 xml configuration에서 HeaderHttpSessionStrategy를 inject 하였는데 왜 그런것일까?  
 ```xml
@@ -287,6 +288,7 @@ CookieHttpSessionStrategy인 것을 볼 수 있다.
 로그인 시도 후 Response를 보면 아래와 같이 x-auth-token이 header에 담긴 것을 확인 할 수 있었으며  
 기존 Code에서는 header에 담긴 Session ID를 다른 Request에 실어 보내지 않았기 때문에  
 로그인 후 다른 시나리오는 정상적으로 처리될 수 없었다.  
+<img src="" style="border: solid 5px black;" />
 
 이 부분은 추가적으로 개발이 필요한 부분이었지만 내가 맡은 솔루션에 다른 이슈들이 정체되어있어  
 원인 파악을 완료한 것에 대해 만족하기로 했다.  
