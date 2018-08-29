@@ -211,7 +211,9 @@ CommonsMultipartResolver의 사용이 필요했다.
 ```
 
 그후 테스트 결과를 보면 정상적으로 파일 업로드가 되었고 업로드 된 파일은  CommonsMultipartFile 타입의 객체이었다.  
+<table border="2" style="width: fit-content"><tr><td>
 <img src="" style="border: solid 5px black;" />
+</td></tr></table>
 
 ## 3. 원인 파악
 
@@ -258,7 +260,9 @@ Client에서는 이후 모든 요청에 x-auth-token Header에 Session ID 값을
 
 하지만 프로젝트 어디서도 Login 후 x-auth-token 헤더에 대한 처리도 없을 뿐 더러  
 실제 Login 인증 완료 후 API의 Response를 봐도 x-auth-token 헤더 자체가 없었다.  
+<table border="2" style="width: fit-content"><tr><td>
 <img src="" style="border: solid 5px black;"  />
+</td></tr></table>
 
 이 부분을 굉장히 이상하게 생각하였고 혹시 x-auth-token을 request에 담아 보내지 않았기에  
 매번 인증 과정이 거쳐졌고 그래서 request.getparameter를 호출하는 authenticationStrategy 로직을 타는 것이  
@@ -267,7 +271,9 @@ Client에서는 이후 모든 요청에 x-auth-token Header에 Session ID 값을
 문제 발견을 위해 가장 원초적인 방법으로 Encoding Filter로 부터 모든 디버깅 과정을 따라갔다.  
 그 중 우연히발견 한 것인데 아래의 코드에서 보면 HttpSessionStrategy로 주입 된 구현체가   
 CookieHttpSessionStrategy인 것을 볼 수 있다.  
+<table border="2" style="width: fit-content"><tr><td>
 <img src="" style="border: solid 5px black;" />
+</td></tr></table>
 
 분명 이 Bean에는 아래 xml configuration에서 HeaderHttpSessionStrategy를 inject 하였는데 왜 그런것일까?  
 ```xml
@@ -289,7 +295,9 @@ CookieHttpSessionStrategy인 것을 볼 수 있다.
 로그인 시도 후 Response를 보면 아래와 같이 x-auth-token이 header에 담긴 것을 확인 할 수 있었으며  
 기존 Code에서는 header에 담긴 Session ID를 다른 Request에 실어 보내지 않았기 때문에  
 로그인 후 다른 시나리오는 정상적으로 처리될 수 없었다.  
+<table border="2" style="width: fit-content"><tr><td>
 <img src="" style="border: solid 5px black;" />
+</td></tr></table>
 
 이 부분은 추가적으로 개발이 필요한 부분이었지만 내가 맡은 솔루션에 다른 이슈들이 정체되어있어  
 원인 파악을 완료한 것에 대해 만족하기로 했다.  
