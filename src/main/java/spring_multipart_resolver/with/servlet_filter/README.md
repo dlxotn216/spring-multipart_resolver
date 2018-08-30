@@ -166,18 +166,47 @@ JavaDoc을 보니 확신이 생겼다.
 Filter의 위치를 고려했을 때 Encoding이슈가 없도록 EncodingFilter 다음에 위치해야했고  
 어떤 Filter가 request에 대한 parsing을 사전처리하는 지 확인이 불가능했으므로 다른 필터보다 앞서서 위치시켰다.
 ```xml
-//TODO CODE
+<filter>
+    <filter-name>characterSetEncodingFilter</filter-name>
+    <filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+    <init-param>
+      <param-name>encoding</param-name>
+      <param-value>UTF-8</param-value>
+    </init-param>
+    <init-param>
+      <param-name>forceEncoding</param-name>
+      <param-value>true</param-value>
+    </init-param>
+</filter>
+<filter-mapping>
+    <filter-name>characterSetEncodingFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+</filter-mapping>
+
+<filter>
+    <filter-name>multipartFilter</filter-name>
+    <filter-class>org.springframework.web.multipart.support.MultipartFilter</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>multipartFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+</filter-mapping>
 ```
 
 그후 기존 Servlet Context에 설정 된 multipartResolver의 이름을 filterMultipartResolver로 바꾸어주었다.
 ```xml
-//TODO fill code
+<!-- xxx-servlet.xml -->
+<bean id="filterMultipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver"/>
 ```
 
 Controller에서 Debugging을 건 후 확인해보니 정상적으로 파일업로드가 되엇다.  
 그런데 한 가지 이상한 것이 업로드 된 MultipartFile이 StandardMultipartfile이었다.  
 즉 filterMultipartResolver로 설정한 CommonsMultipartResolver에 의해 parsing 된 것이 아닌  
 StandardMultipartResolver에 의해 parsing 된 것이었다.  
+
+<table border="2" style="width: fit-content"><tr><td>
+<img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/StandardMultipartfileInController.png" style="border: solid 5px black;" />
+</td></tr></table>
 
 확인을 위해 MultipartFilter의 아래 코드에 디버깅을 해보앗다.  
 ```java
@@ -198,7 +227,9 @@ class MultipartFilter {
     }
 }
 ```
-
+<table border="2" style="width: fit-content"><tr><td>
+<img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/root-applicationcontext.png" style="border: solid 5px black;" />
+</td></tr></table>
 확인해보면 WebApplicationContextUtils를 통해 얻은 WebApplicationContext는 RootContext이었다.  
 따라서 Root application context에는 filterMultipartResolver이름의 Bean이 없기 때문에  
 defaultMultipartResolver를 리턴하였고 이것은 StandardMultipartResolver이었다.  
@@ -207,13 +238,11 @@ defaultMultipartResolver를 리턴하였고 이것은 StandardMultipartResolver�
 CommonsMultipartResolver의 사용이 필요했다.  
 따라서 아래와 같이 filterMultipartResolver Bean의 설정을 Root application context로 이동하였다.
 ```xml
-//TODO fill code
+<!-- application-context.xml -->
+<bean id="filterMultipartResolver" class="org.springframework.web.multipart.commons.CommonsMultipartResolver"/>
 ```
 
 그후 테스트 결과를 보면 정상적으로 파일 업로드가 되었고 업로드 된 파일은  CommonsMultipartFile 타입의 객체이었다.  
-<table border="2" style="width: fit-content"><tr><td>
-<img src="" style="border: solid 5px black;" />
-</td></tr></table>
 
 ## 3. 원인 파악
 
@@ -229,10 +258,23 @@ CookieHttpSessionStrategy를 사용할 경우 내부에서 getParameter를 호�
 호출되는 것이기때문에 별 상관 없었다.  
 
 프로젝트에는 CookieHttpSessionStrategy가 아닌 HeaderHttpSessionStrategy가 설정되어있었다.  
-하지만 계속 의심스러웠던 것은 문제가 발생한 솔루션엔 HeaderHttpSessionStrategy가 존재했지만  
-문제가 발새하지 않은 솔루션엔 HeaderHttpSessionStrategy 설정이 없었다.  
+하지만 문제가 발생한 솔루션엔 HeaderHttpSessionStrategy가 존재했지만  
+문제가 발생하지 않은 솔루션엔 HeaderHttpSessionStrategy 설정이 없었기에 이부분이 의심스러웠다..  
 ```xml
-//TODO fill code
+<!-- 문제가 발생한 솔루션의 Configuration -->
+<bean class="org.springframework.session.data.redis.RedisOperationsSessionRepository" name="sessionRepository" >
+    <constructor-arg name="redisConnectionFactory" ref="jedisConnFactory" />
+</bean>
+
+<bean class="org.springframework.session.web.http.HeaderHttpSessionStrategy" name="sessionStrategy" />
+
+<bean name="springSessionRepositoryFilter" class="org.springframework.session.web.http.SessionRepositoryFilter">
+    <constructor-arg name="sessionRepository" ref="sessionRepository" />
+</bean>
+
+<bean class="org.springframework.session.data.redis.config.annotation.web.http.RedisHttpSessionConfiguration" >
+    <property name="httpSessionStrategy" ref="sessionStrategy"/>
+</bean>
 ```
 
 JavaDoc을 확인하면 아래와 같은데  
@@ -261,7 +303,7 @@ Client에서는 이후 모든 요청에 x-auth-token Header에 Session ID 값을
 하지만 프로젝트 어디서도 Login 후 x-auth-token 헤더에 대한 처리도 없을 뿐 더러  
 실제 Login 인증 완료 후 API의 Response를 봐도 x-auth-token 헤더 자체가 없었다.  
 <table border="2" style="width: fit-content"><tr><td>
-<img src="" style="border: solid 5px black;"  />
+<img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/LoginSuccessRequest_COOKIE.png" style="border: solid 5px black;"  />
 </td></tr></table>
 
 이 부분을 굉장히 이상하게 생각하였고 혹시 x-auth-token을 request에 담아 보내지 않았기에  
@@ -272,31 +314,121 @@ Client에서는 이후 모든 요청에 x-auth-token Header에 Session ID 값을
 그 중 우연히발견 한 것인데 아래의 코드에서 보면 HttpSessionStrategy로 주입 된 구현체가   
 CookieHttpSessionStrategy인 것을 볼 수 있다.  
 <table border="2" style="width: fit-content"><tr><td>
-<img src="" style="border: solid 5px black;" />
+<img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/CookieHttpSessionStrategy.png" style="border: solid 5px black;" />
 </td></tr></table>
 
-분명 이 Bean에는 아래 xml configuration에서 HeaderHttpSessionStrategy를 inject 하였는데 왜 그런것일까?  
+분명 아래에서 RedisHttpSessionConfiguration 내에 httpSessionStrategy를 주입하고 있는데 왜 CookieHttpSessionStrategy가
+주입되어있을까?
 ```xml
-//TODO fill Code
+<bean class="org.springframework.session.data.redis.config.annotation.web.http.RedisHttpSessionConfiguration" >
+ <property name="httpSessionStrategy" ref="sessionStrategy"/>
+</bean>
 ```
 
-원인을 찾기 위해 Spring container가 초기화 될 때 Debugging을 걸어 확인해보았다.  
-아래에서 확인할 수 있듯이 XXXX Bean이 처리하는 Configuration 내에 SessionRepositoryFilter Bean이 선언되어있고  
-이 Bean에선 inject 한 HeaderHttpSession을 기반으로 하는 SessionRepositoryfilter를 Bean으로 등록 처리한다.  
+먼저 SessionRepositoryFilter의 configuration은 아래와 같이 생성자 주입으로 sessionRepository를 주입한다.
+```xml
+<bean name="springSessionRepositoryFilter" class="org.springframework.session.web.http.SessionRepositoryFilter">
+    <constructor-arg name="sessionRepository" ref="sessionRepository" />
+</bean>
+```
+아래의 코드에서 보면 생성자 주입 외에 httpSessionStrategy에 대한 Setter가 존재하며  
+Default httpSessionStrategy는 CookieHttpSessionStrategy인 것을 확인할 수 있다.
+```java
+@Order(SessionRepositoryFilter.DEFAULT_ORDER)
+public class SessionRepositoryFilter<S extends ExpiringSession> extends OncePerRequestFilter {
+    public static final String SESSION_REPOSITORY_ATTR = SessionRepository.class.getName();
 
-하지만 아래 xml configuration을 보면 XXX Bean에 HeaderHttpSessionStrategy를 주입하고 있지 않으며  
-오히려 SessionRepositoryFilter를 중복 정의하고 있고 이 중복 된 Bean에 HeaderHttpSessionStrategy를 주입하고 있다.  
-내부에서 등록되는 과정을 보면 어떤 HttpSessionStrategy를 주입해도 결과적으로는 CookieHttpSessionStrategy를  
-사용하게 되어있어 문제가 되었던 것이다.  
+    public static final int DEFAULT_ORDER = Integer.MIN_VALUE + 50;
+    
+    private final SessionRepository<S> sessionRepository;
 
-따라서 의도한 대로 동작하게 하기 위해 HeaderHttpSessionStrategy의 주입을 아래와 같이 변경해주었고  
-중복 정의되었던 SessionRepositoryFilter는 제거한 후 프로젝트를 다시 실행했다.  
+    private ServletContext servletContext;
+
+    //Default httpSessionStrategy -> CookieHttpSessionStrategy
+    private MultiHttpSessionStrategy httpSessionStrategy = new CookieHttpSessionStrategy();
+    
+    public SessionRepositoryFilter(SessionRepository<S> sessionRepository) {
+        if(sessionRepository == null) {
+            throw new IllegalArgumentException("SessionRepository cannot be null");
+        }
+        this.sessionRepository = sessionRepository;
+    }
+    
+    public void setHttpSessionStrategy(HttpSessionStrategy httpSessionStrategy) {
+        if(sessionRepository == null) {
+            throw new IllegalArgumentException("httpSessionIdStrategy cannot be null");
+    }
+	this.httpSessionStrategy = new MultiHttpSessionStrategyAdapter(httpSessionStrategy);
+    }
+}
+```
+
+생성자 주입과 Setter를 이용한 주입은 동시에 처리될 수 없기 때문에 난감한 상황이다.  
+설정을 더 둘러보던 중 RedisHttpSessionConfiguration 내부를 확인하여 해결법을 찾았다.   
+먼저 xml configuration을 보면 아래와 같다. 
+```xml
+<bean class="org.springframework.session.web.http.HeaderHttpSessionStrategy" name="sessionStrategy" />
+
+<bean class="org.springframework.session.data.redis.config.annotation.web.http.RedisHttpSessionConfiguration" >
+   <property name="httpSessionStrategy" ref="sessionStrategy"/>
+</bean>
+```
+
+내부 코드를 확인해보면 아래와 같이 SessionRepositoryFilter에 대한 Bean 정의가 있다.  
+RedisHttpSessionConfiguration Bean에 httpSessionStrategy를 Setter로 주입하고 있으므로  
+아래에서 생성 된 Bean은 HttpSessionStrategy를 주입받은 SessionRepositoryFilter를 만들어 낼 것이다. 
+
+또한 내부에서 RedisOperationSessionRepository bean도 생성하고 있다.
+```java
+@org.springframework.context.annotation.Configuration
+public class RedisHttpSessionConfiguration {
+    //.....
+    //다른 Bean Configuration
+    @Bean
+    public RedisOperationsSessionRepository sessionRepository(RedisTemplate<String, ExpiringSession> sessionRedisTemplate) {
+        RedisOperationsSessionRepository sessionRepository = new RedisOperationsSessionRepository(sessionRedisTemplate);
+        sessionRepository.setDefaultMaxInactiveInterval(maxInactiveIntervalInSeconds);
+        return sessionRepository;
+    }
+    	
+    @Bean
+    public <S extends ExpiringSession> SessionRepositoryFilter<? extends ExpiringSession> springSessionRepositoryFilter(SessionRepository<S> sessionRepository, ServletContext servletContext) {
+        SessionRepositoryFilter<S> sessionRepositoryFilter = new SessionRepositoryFilter<S>(sessionRepository);
+        sessionRepositoryFilter.setServletContext(servletContext);
+        if(httpSessionStrategy != null) {
+            sessionRepositoryFilter.setHttpSessionStrategy(httpSessionStrategy);
+        }
+        return sessionRepositoryFilter;
+    }
+    //.....
+} 
+```
+
+따라서 아래와 같이 xml configuration으로 생성된 SessionRepositoryFilter(Default로 CookieHttpSessionStrategy를 사용하는)  
+설정 부분을 주석으로 처리하고 SessionRepository Bean도 주석으로 처리한 후 다시 실행해보았다.  
+(그 외에도 필요한 RedisConnectionFactory, RedisTemplate 등은 RedisHttpSessionConfiguration에서 주입받고 있기 때문에  
+ 기존 xml configuration에서 선언한 내용으로 의도한대로 설정이 완료될 수 있었다.)
+```xml
+<!--<bean class="org.springframework.session.data.redis.RedisOperationsSessionRepository" name="sessionRepository" >
+    <constructor-arg name="redisConnectionFactory" ref="jedisConnFactory" />
+</bean>-->
+
+<bean class="org.springframework.session.web.http.HeaderHttpSessionStrategy" name="sessionStrategy" />
+
+<!--<bean name="springSessionRepositoryFilter" class="org.springframework.session.web.http.SessionRepositoryFilter">-->
+<!--<constructor-arg name="sessionRepository" ref="sessionRepository" />-->
+<!--</bean>-->
+
+<bean class="org.springframework.session.data.redis.config.annotation.web.http.RedisHttpSessionConfiguration" >
+    <property name="httpSessionStrategy" ref="sessionStrategy"/>
+</bean>
+```
 
 로그인 시도 후 Response를 보면 아래와 같이 x-auth-token이 header에 담긴 것을 확인 할 수 있었으며  
 기존 Code에서는 header에 담긴 Session ID를 다른 Request에 실어 보내지 않았기 때문에  
 로그인 후 다른 시나리오는 정상적으로 처리될 수 없었다.  
 <table border="2" style="width: fit-content"><tr><td>
-<img src="" style="border: solid 5px black;" />
+<img src="https://raw.githubusercontent.com/dlxotn216/image/master/spring-multipartresolver/LoginSuccessRequest_HEADER.png" style="border: solid 5px black;" />
 </td></tr></table>
 
 이 부분은 추가적으로 개발이 필요한 부분이었지만 내가 맡은 솔루션에 다른 이슈들이 정체되어있어  
@@ -304,3 +436,6 @@ CookieHttpSessionStrategy인 것을 볼 수 있다.
 
 아마 발급 받은 Session ID를 모든 Request의 x-auth-token header에 실어 보내도록 설정 한 후에는  
 MultipartFilter가 등록되지 않아도 정상적으로 파일 업로드가 가능 했을 것이라고 예측 된다.
+
+## 4. 마치며
+//TODO 
