@@ -1,4 +1,4 @@
-# Spring Filter와 Multipart Resolver
+# Servlet Filter와 Multipart Resolver
 
 ## 1. 문제 발생
 최근 팀에서 진행하는 프로젝트 중 Cloud 환경에 배포해야 할 일이 생겼다.  
